@@ -1,0 +1,60 @@
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.17;
+
+contract EventContract{
+
+struct Event{
+address organizer;
+string name;
+uint date;
+uint price;
+uint income;
+uint totalTickets;
+uint ticketsRemaining;
+}
+mapping (uint=> Event)public events;
+mapping (address =>mapping (uint=>uint))public tickets;
+
+uint public nextId;
+
+function createEvent(string memory name, uint date, uint price, uint totalTickets)external {
+   require(date > block.timestamp," Please enter date in future time");
+   require(totalTickets>0, "Please enter amount greater than zero");
+   events[nextId] = Event({
+       organizer : msg.sender,
+       name : name,
+       date : date,
+       income : 0,
+       price: price,
+       totalTickets : totalTickets,
+       ticketsRemaining : totalTickets
+   });
+   nextId++;
+}
+function buyTicket(uint id, uint quantity) external payable  {
+    require(events[id].date != 0, "Sorry! the event doesn't exist");
+    require(events[id].date > block.timestamp, "Event has already occured");
+    Event storage _event = events[id];
+    require(msg.value ==(_event.price * quantity), "Invalid amount");
+    require(_event.ticketsRemaining >=quantity, "Not enough tickets");
+    _event.income +=msg.value;
+    _event.ticketsRemaining -= quantity;
+    tickets[msg.sender][id] += quantity;
+
+}
+function transferTickets(uint id, uint quantity, address to)external {
+    require(events[id].date != 0, "Sorry! the event doesn't exist");
+    require(events[id].date > block.timestamp, "Event has already occured");
+    require(tickets[msg.sender][id]>= quantity, "Not enough tickets");
+    tickets[msg.sender][id] -= quantity;
+    tickets[to][id]+= quantity;
+
+}
+function withdrawFunds(uint id) external payable returns(bool){
+    require(msg.sender == events[id].organizer, "You are not the organizer");
+    require(events[id].income >0 ,"Not enough balance");
+    payable(events[id].organizer).transfer(events[id].income);
+    events[id].income =0;
+    return true;
+}
+}
