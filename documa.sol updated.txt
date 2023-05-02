@@ -1,0 +1,334 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract Document {
+    enum DocumentCategory {
+        Insurance,
+        MedicalNotes,
+        Prescriptions,
+        ImageDocuments,
+        Tests
+    }
+
+    struct DocumentDetails {
+        address hospital;
+        address documenter;
+        string documentHash;
+        string documentName;
+        DocumentCategory category;
+        uint256 timestamp;
+        uint256 price;
+        bool isExpired;
+        bool isVerified;
+        bool isAppointment;
+        address healthCareProvider;
+    }
+
+    mapping(uint256 => DocumentDetails) public documents;
+    // mapping(address => bool) public hospitals;
+    mapping(address => string) public users;
+    mapping(address => mapping(uint256 => bool)) public accessPermissions;
+    mapping(address => mapping(uint256 => bool)) public appointments;
+    mapping(uint256 => bool) public isVerifiedDocument;
+
+    uint256[] public totalDocumentsUploaded;
+    address[]public allGeneralUsers;
+    address[]public allDocumenters;
+    address[]public allVerifiers;
+    address payable public owner;
+    uint256 public feePercentage = 50; //0.5 percent fees
+
+    event DocumentUploaded(
+        address indexed hospital,
+        uint256 indexed documentId,
+        DocumentCategory category,
+        uint256 price
+    );
+    event DocumentAccessGranted(
+        address indexed user,
+        uint256 indexed documentId
+    );
+    event DocumentAccessRevoked(
+        address indexed user,
+        uint256 indexed documentId
+    );
+    event AppointmentScheduled(
+        address indexed user,
+        address indexed healthCareProvider,
+        uint256 indexed documentId
+    );
+    event RoleGranted(address indexed user, string role);
+    event RoleRevoked(address indexed user, string role);
+
+    constructor() {
+        owner = payable(msg.sender);
+    }
+
+    modifier onlyOwner() {
+        require(
+            msg.sender == owner,
+            "Only contract owner can perform this action"
+        );
+        _;
+    }
+
+    modifier onlyDocumenter() {
+        require(
+            bytes(users[msg.sender]).length > 0 &&
+                keccak256(bytes(users[msg.sender])) ==
+                keccak256(bytes("documenter")),
+            "Only registered documenter can perform this action"
+        );
+        _;
+    }
+
+    modifier onlyGeneralUser() {
+        require(
+            bytes(users[msg.sender]).length > 0,
+            "Only registered general users can perform this action"
+        );
+        _;
+    }
+
+    modifier onlyVerifier() {
+        require(
+            bytes(users[msg.sender]).length > 0 &&
+                keccak256(bytes(users[msg.sender])) ==
+                keccak256(bytes("verifier")),
+            "Only registered verifiers can perform this action"
+        );
+        _;
+    }
+
+    function registerUser(string memory role) public {
+        require(
+            bytes(users[msg.sender]).length == 0,
+            "User is already registered"
+        );
+        require(
+            keccak256(bytes(role)) == keccak256(bytes("general user")) ||
+                keccak256(bytes(role)) == keccak256(bytes("verifier")) ||
+                keccak256(bytes(role)) == keccak256(bytes("documenter")),
+            "Invalid role"
+        );
+            users[msg.sender] = role;
+        if(keccak256(bytes(role)) == keccak256(bytes("general user"))){
+            allGeneralUsers.push(msg.sender);
+            emit RoleGranted(msg.sender, "general user");
+        }
+
+        else if (keccak256(bytes(role)) == keccak256(bytes("documenter"))) {
+            allDocumenters.push(msg.sender);
+            emit RoleGranted(msg.sender, "documenter");
+        } else{
+            allVerifiers.push(msg.sender);
+            emit RoleGranted(msg.sender, "verifier");
+        }
+    }
+
+    // function registerHospital() public {
+    //     require(!hospitals[msg.sender], "Hospital is already registered");
+    //     hospitals[msg.sender] = true;
+    // }
+
+    function grantDocumentAccess(address user, uint256 documentId)
+        public
+        onlyDocumenter
+    {
+        require(
+            !accessPermissions[user][documentId],
+            "Document access is already granted to this user"
+        );
+        accessPermissions[user][documentId] = true;
+        emit DocumentAccessGranted(user, documentId);
+    }
+
+    function revokeDocumentAccess(address user, uint256 documentId)
+        public
+        onlyDocumenter
+    {
+        require(
+            accessPermissions[user][documentId],
+            "Document access is not granted to this user"
+        );
+        accessPermissions[user][documentId] = false;
+        emit DocumentAccessRevoked(user, documentId);
+    }
+
+    function scheduleAppointment(
+        uint256 documentId,
+        address _healthCareProvider
+    ) public onlyGeneralUser {
+        DocumentDetails storage _doc = documents[documentId];
+        require(
+            accessPermissions[msg.sender][documentId],
+            "Access to the document is not granted to this user"
+        );
+        require(
+            !appointments[msg.sender][documentId],
+            "Appointment is already scheduled"
+        );
+        _doc.isAppointment = true;
+        _doc.healthCareProvider = _healthCareProvider;
+        appointments[msg.sender][documentId] = true;
+        emit AppointmentScheduled(msg.sender, _healthCareProvider, documentId);
+    }
+
+    function uploadDocument(
+        address _hospital,
+        uint8 _category,
+        string memory documentHash,
+        string memory documentName,
+        uint256 price
+    ) public payable onlyDocumenter returns (uint256) {
+        uint256 documentId = uint256(
+            keccak256(
+                abi.encodePacked(documentHash, msg.sender, block.timestamp)
+            )
+        );
+        require(
+            bytes(documents[documentId].documentHash).length == 0,
+            "Document already exists"
+        );
+        require(price > 0, "Price must be more than zero");
+        require(
+            _category >= 0 && _category < uint8(DocumentCategory.Tests),
+            "Invalid document category"
+        );
+        uint256 fee = (price * feePercentage) / 10000;
+        require(msg.value >= fee, "Not enough fee paid");
+        payable(owner).transfer(msg.value);
+        documents[documentId] = DocumentDetails(
+            _hospital,
+            msg.sender,
+            documentHash,
+            documentName,
+            DocumentCategory(_category),
+            block.timestamp,
+            price,
+            false,
+            false,
+            false,
+            address(0)
+        );
+        totalDocumentsUploaded.push(documentId);
+        emit DocumentUploaded(
+            msg.sender,
+            documentId,
+            DocumentCategory(_category),
+            price
+        );
+        return (documentId);
+    }
+
+    function getDocumentDetails(uint256 documentId)
+        public
+        view
+        returns (
+            address,
+            address,
+            string memory,
+            string memory,
+            uint8,
+            uint256,
+            uint256,
+            bool,
+            bool,
+            bool,
+            address
+        )
+    {
+        DocumentDetails storage doc = documents[documentId];
+        require(bytes(doc.documentHash).length > 0, "Document does not exist");
+
+        return (
+            doc.hospital,
+            doc.documenter,
+            doc.documentHash,
+            doc.documentName,
+            uint8(doc.category),
+            doc.timestamp,
+            doc.price,
+            doc.isExpired,
+            doc.isVerified,
+            doc.isAppointment,
+            doc.healthCareProvider
+        );
+    }
+
+    function getTotalDocumentsUploaded()
+        external
+        view
+        returns (uint256[] memory)
+    {
+        return totalDocumentsUploaded;
+    }
+
+    function getDocumentPrice(uint256 documentId)
+        public
+        view
+        returns (uint256)
+    {
+        DocumentDetails storage doc = documents[documentId];
+        require(bytes(doc.documentHash).length > 0, "Document does not exist");
+
+        return doc.price;
+    }
+
+    function updateDocumentPrice(uint256 documentId, uint256 newPrice)
+        public
+        onlyDocumenter
+    {
+        DocumentDetails storage doc = documents[documentId];
+        require(bytes(doc.documentHash).length > 0, "Document does not exist");
+        require(
+            doc.hospital == msg.sender,
+            "Only the hospital that uploaded the document can update its price"
+        );
+
+        doc.price = newPrice;
+    }
+
+    function retrieveDocument(uint256 documentId) public onlyGeneralUser {
+        DocumentDetails storage doc = documents[documentId];
+        require(bytes(doc.documentHash).length > 0, "Document does not exist");
+        require(!doc.isExpired, "Document already expired");
+        require(doc.hospital == msg.sender, "Only the hospital can expire it");
+
+        doc.isExpired = true;
+    }
+
+    function verifyDocument(uint256 documentId) public onlyVerifier {
+        DocumentDetails storage doc = documents[documentId];
+        require(!doc.isExpired, "Document is expired");
+        require(!isVerifiedDocument[documentId], "Document already verified");
+        isVerifiedDocument[documentId] = true;
+        doc.isVerified = true;
+    }
+
+    function grantVerifierRole(address user) public onlyOwner {
+        require(bytes(users[user]).length > 0, "User is not registered");
+        require(
+            keccak256(bytes(users[user])) != keccak256(bytes("verifier")),
+            "User is already a verifier"
+        );
+
+        users[user] = "verifier";
+        emit RoleGranted(user, "verifier");
+    }
+
+    function updateFee(uint256 _newFee) external onlyOwner {
+        feePercentage = _newFee;
+    }
+
+    function revokeVerifierRole(address user) public onlyOwner {
+        require(bytes(users[user]).length > 0, "User is not registered");
+        require(
+            keccak256(bytes(users[user])) == keccak256(bytes("verifier")),
+            "User is not a verifier"
+        );
+
+        users[user] = "";
+        emit RoleRevoked(user, "verifier");
+    }
+}
