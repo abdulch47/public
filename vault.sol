@@ -220,19 +220,21 @@ contract MultiSigWallet {
         _;
     }
 
-    constructor(uint256 coinAmount) {
+    constructor(uint256 coinAmount, address _tokenCoin) {
         owner = tx.origin;
         totalCoinsLocked = coinAmount;
+        tokenCoin = _tokenCoin;
         unlockTimestamp = block.timestamp + LOCK_DURATION;
     }
 
     function unlockCoins() external onlyOwners {
         require(block.timestamp >= unlockTimestamp, "Coins are still locked");
+        uint256 coinsTransfer = totalCoinsLocked;
         // Reset state variables
         totalCoinsLocked = 0;
         unlockTimestamp = 0;
         // Transfer the locked "Coin" tokens to the authorized
-        IERC20(tokenCoin).transfer(msg.sender, totalCoinsLocked);
+        IERC20(tokenCoin).transfer(msg.sender, coinsTransfer);
 
         emit CoinsUnlocked(totalCoinsLocked);
     }
@@ -419,7 +421,7 @@ contract TokensVault is Ownable {
         uint256 coinsPerMultiSig = multiSigCoins / multiSigsPerCycle;
 
         for(uint8 i; i < multiSigsPerCycle; i++){
-        MultiSigWallet multiSig = new MultiSigWallet(coinsPerMultiSig);
+        MultiSigWallet multiSig = new MultiSigWallet(coinsPerMultiSig, tokenCoin);
         IERC20(tokenCoin).transfer(address(multiSig), coinsPerMultiSig);
         multiSigWallets.push(address(multiSig));
         }
