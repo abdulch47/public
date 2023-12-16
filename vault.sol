@@ -254,7 +254,7 @@ contract MultiSigWallet {
 pragma solidity ^0.8.0;
 
 contract TokensVault is Ownable {
-    uint256 public cycleDuration = 2 minutes;
+    uint256 public cycleDuration = 45 days;
     uint8 public lockedCycles = 6;
     uint8 public totalCycles = 96;
     uint256 public totalSupply;
@@ -394,6 +394,7 @@ contract TokensVault is Ownable {
         );
         uint256 userTokens = _user.tokensPurchased[_count];
         require(userTokens > 0, "Not enough tokens");
+        _user.tokensPurchased[_count] = 0;
         uint256 convertedCoins = calCoins(userTokens);
         // Burn converted tokens
         IERC20(abcToken).burnFrom(msg.sender, userTokens);
