@@ -201,7 +201,7 @@ abstract contract Ownable is Context {
 }
 
 contract MultiSigWallet {
-    uint256 public constant lockDuration = 10 minutes; //2 years locking period
+    uint256 public constant lockDuration = 730 days; //2 years locking period
 
     address public owner;
     address public promoter;
