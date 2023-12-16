@@ -4,9 +4,9 @@
 interface IERC20 {
     function decimals() external view returns (uint8);
 
-    function burn(uint256 amount) external returns (bool);
+    function burn(uint256 amount) external;
 
-    function burnFrom(address account, uint256 amount) external returns (bool);
+    function burnFrom(address account, uint256 amount) external;
 
     /**
      * @dev Emitted when `value` tokens are moved from one account (`from`) to
@@ -201,7 +201,7 @@ abstract contract Ownable is Context {
 }
 
 contract MultiSigWallet {
-    uint256 public constant LOCK_DURATION = 730 days; //2 years locking period
+    uint256 public constant lockDuration = 10 minutes; //2 years locking period
 
     address public owner;
     address public promoter;
@@ -224,7 +224,7 @@ contract MultiSigWallet {
         owner = tx.origin;
         totalCoinsLocked = coinAmount;
         tokenCoin = _tokenCoin;
-        unlockTimestamp = block.timestamp + LOCK_DURATION;
+        unlockTimestamp = block.timestamp + lockDuration;
     }
 
     function unlockCoins() external onlyOwners {
@@ -236,7 +236,7 @@ contract MultiSigWallet {
         // Transfer the locked "Coin" tokens to the authorized
         IERC20(tokenCoin).transfer(msg.sender, coinsTransfer);
 
-        emit CoinsUnlocked(totalCoinsLocked);
+        emit CoinsUnlocked(coinsTransfer);
     }
 
     function addPromoter(address _promoter) external {
@@ -254,7 +254,7 @@ contract MultiSigWallet {
 pragma solidity ^0.8.0;
 
 contract TokensVault is Ownable {
-    uint256 public cycleDuration = 45 days;
+    uint256 public cycleDuration = 2 minutes;
     uint8 public lockedCycles = 6;
     uint8 public totalCycles = 96;
     uint256 public totalSupply;
@@ -450,7 +450,7 @@ contract TokensVault is Ownable {
     }
 
     function calCoins(uint256 _tokens) public view returns (uint256) {
-        uint256 _coins = _tokens / tokensPerCoin;
+        uint256 _coins = (_tokens * 10 ** IERC20(tokenCoin).decimals()) / tokensPerCoin;
         return _coins;
     }
 
@@ -502,5 +502,10 @@ contract TokensVault is Ownable {
         User storage user_ = user[_user];
         require(_index <= user_.count, "Invalid index");
         return (user_.tokensPurchased[_index], user_.lockedPeriod[_index]);
+    }
+
+    function upLineReferrals(address _user) external view returns (address[] memory){
+        User storage user_ = user[_user];
+        return user_.referrals;
     }
 }
