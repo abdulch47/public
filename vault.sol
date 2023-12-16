@@ -295,10 +295,7 @@ contract TokensVault is Ownable {
     event TokensConverted(address indexed buyer, uint256 amount);
     event ReferralBonusTransferred(address indexed referrer, uint256 amount);
 
-    constructor(
-        address _abcToken,
-        address _tokenCoin
-    ) {
+    constructor(address _abcToken, address _tokenCoin) {
         abcToken = _abcToken;
         tokenCoin = _tokenCoin;
         minBuyLimit = 100 * 10**IERC20(abcToken).decimals();
@@ -418,36 +415,42 @@ contract TokensVault is Ownable {
         }
         uint256 multiSigTokens = multiSigSupply / totalCycles;
         uint256 multiSigCoins = calCoins(multiSigTokens);
+        IERC20(abcToken).burn(multiSigTokens);
         uint256 coinsPerMultiSig = multiSigCoins / multiSigsPerCycle;
 
-        for(uint8 i; i < multiSigsPerCycle; i++){
-        MultiSigWallet multiSig = new MultiSigWallet(coinsPerMultiSig, tokenCoin);
-        IERC20(tokenCoin).transfer(address(multiSig), coinsPerMultiSig);
-        multiSigWallets.push(address(multiSig));
+        for (uint8 i; i < multiSigsPerCycle; i++) {
+            MultiSigWallet multiSig = new MultiSigWallet(
+                coinsPerMultiSig,
+                tokenCoin
+            );
+            IERC20(tokenCoin).transfer(address(multiSig), coinsPerMultiSig);
+            multiSigWallets.push(address(multiSig));
         }
         cycleCountIndex++;
     }
-    
-    function addABCTokens(uint256 _totalSupply, uint256 _multiSigSupply) external onlyOwner {
-     uint256 _totalTokens = _totalSupply + _multiSigSupply;
-     IERC20(abcToken).transferFrom(msg.sender, address(this), _totalTokens);
-     totalSupply += _totalSupply;
-     multiSigSupply += _multiSigSupply;
+
+    function addABCTokens(uint256 _totalSupply, uint256 _multiSigSupply)
+        external
+        onlyOwner
+    {
+        uint256 _totalTokens = _totalSupply + _multiSigSupply;
+        IERC20(abcToken).transferFrom(msg.sender, address(this), _totalTokens);
+        totalSupply += _totalSupply;
+        multiSigSupply += _multiSigSupply;
     }
 
-    function addRefTokens(uint256 _refSupply) external onlyOwner{
-     IERC20(abcToken).transferFrom(msg.sender, address(this), _refSupply);
-     refSupply += _refSupply;
+    function addRefTokens(uint256 _refSupply) external onlyOwner {
+        IERC20(abcToken).transferFrom(msg.sender, address(this), _refSupply);
+        refSupply += _refSupply;
     }
 
-    function addTokenCoins(uint256 _totalCoins) external onlyOwner{
+    function addTokenCoins(uint256 _totalCoins) external onlyOwner {
         IERC20(tokenCoin).transferFrom(msg.sender, address(this), _totalCoins);
         totalSupplyCoins += _totalCoins;
     }
 
     function calCoins(uint256 _tokens) public view returns (uint256) {
-        uint256 _coins = (_tokens * IERC20(tokenCoin).decimals()) /
-            tokensPerCoin;
+        uint256 _coins = _tokens / tokensPerCoin;
         return _coins;
     }
 
@@ -487,13 +490,17 @@ contract TokensVault is Ownable {
         totalCycles = _totalCycles;
     }
 
-    function retrieveMultiSigs() external view returns(address[] memory){
+    function retrieveMultiSigs() external view returns (address[] memory) {
         return multiSigWallets;
     }
 
-    function userPurchasedTokens(address _user, uint256 _index) external view returns(uint256, uint256){
-     User storage user_ = user[_user];
-     require(_index <= user_.count, "Invalid index");
-     return (user_.tokensPurchased[_index], user_.lockedPeriod[_index]);
-    } 
+    function userPurchasedTokens(address _user, uint256 _index)
+        external
+        view
+        returns (uint256, uint256)
+    {
+        User storage user_ = user[_user];
+        require(_index <= user_.count, "Invalid index");
+        return (user_.tokensPurchased[_index], user_.lockedPeriod[_index]);
+    }
 }
