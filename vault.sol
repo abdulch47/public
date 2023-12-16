@@ -254,9 +254,9 @@ contract MultiSigWallet {
 pragma solidity ^0.8.0;
 
 contract TokensVault is Ownable {
-    uint256 public cycle_Duration = 45 days;
-    uint8 public locked_Cycles = 6;
-    uint8 public total_Cycles = 96;
+    uint256 public cycleDuration = 45 days;
+    uint8 public lockedCycles = 6;
+    uint8 public totalCycles = 96;
     uint256 public totalSupply;
     uint256 public minBuyLimit;
     uint256 public maxBuyLimit;
@@ -264,10 +264,10 @@ contract TokensVault is Ownable {
     uint8 public referralPercentage = 9;
     uint8 private multiSigsPerCycle = 12;
     address[] private multiSigWallets;
-    uint256 public totalSupply_Coins;
+    uint256 public totalSupplyCoins;
     uint256 public refSupply;
     uint256 public multiSigSupply;
-    uint256 public cycle_Count_Index;
+    uint256 public cycleCountIndex;
 
     struct User {
         address[] referrals;
@@ -308,7 +308,7 @@ contract TokensVault is Ownable {
 
     function buyTokensWithRef(uint256 amount, address _ref) external {
         require(amount >= 0, "Invalid amount");
-        Cycle storage _cycle = cycle[cycle_Count_Index - 1];
+        Cycle storage _cycle = cycle[cycleCountIndex - 1];
         require(_cycle.cycleEndTime > block.timestamp, "Cycle Time Over");
         require(_cycle.availableTokens >= amount, "Not enough tokens to buy");
         require(
@@ -322,7 +322,7 @@ contract TokensVault is Ownable {
         uint256 _index = _user.count;
         _user.lockedPeriod[_index] =
             block.timestamp +
-            (cycle_Duration * locked_Cycles);
+            (cycleDuration * lockedCycles);
         _user.tokensPurchased[_index] = amount;
 
         _cycle.availableTokens -= amount;
@@ -364,7 +364,7 @@ contract TokensVault is Ownable {
 
     function buyTokens(uint256 amount) external {
         require(amount >= 0, "Invalid amount");
-        Cycle storage _cycle = cycle[cycle_Count_Index - 1];
+        Cycle storage _cycle = cycle[cycleCountIndex - 1];
         require(_cycle.cycleEndTime > block.timestamp, "Cycle Time Over");
         require(_cycle.availableTokens >= amount, "Not enough tokens to buy");
         require(
@@ -377,7 +377,7 @@ contract TokensVault is Ownable {
         uint256 _index = _user.count;
         _user.lockedPeriod[_index] =
             block.timestamp +
-            (cycle_Duration * locked_Cycles);
+            (cycleDuration * lockedCycles);
         _user.tokensPurchased[_index] = amount;
 
         _cycle.availableTokens -= amount;
@@ -406,17 +406,17 @@ contract TokensVault is Ownable {
     }
 
     function setCycle() external onlyOwner {
-        Cycle storage _cycle = cycle[cycle_Count_Index];
-        _cycle.cycleEndTime = block.timestamp + cycle_Duration;
-        if (cycle_Count_Index == 0) {
-            _cycle.availableTokens = totalSupply / total_Cycles;
+        Cycle storage _cycle = cycle[cycleCountIndex];
+        _cycle.cycleEndTime = block.timestamp + cycleDuration;
+        if (cycleCountIndex == 0) {
+            _cycle.availableTokens = totalSupply / totalCycles;
         } else {
-            Cycle memory previous_Cycle = cycle[cycle_Count_Index - 1];
-            uint256 _totalTokens = (totalSupply / total_Cycles) +
+            Cycle memory previous_Cycle = cycle[cycleCountIndex - 1];
+            uint256 _totalTokens = (totalSupply / totalCycles) +
                 previous_Cycle.availableTokens;
             _cycle.availableTokens = _totalTokens;
         }
-        uint256 multiSigTokens = multiSigSupply / total_Cycles;
+        uint256 multiSigTokens = multiSigSupply / totalCycles;
         uint256 multiSigCoins = calCoins(multiSigTokens);
         uint256 coinsPerMultiSig = multiSigCoins / multiSigsPerCycle;
 
@@ -425,7 +425,7 @@ contract TokensVault is Ownable {
         IERC20(tokenCoin).transfer(address(multiSig), coinsPerMultiSig);
         multiSigWallets.push(address(multiSig));
         }
-        cycle_Count_Index++;
+        cycleCountIndex++;
     }
     
     function addABCTokens(uint256 _totalSupply, uint256 _multiSigSupply) external onlyOwner {
@@ -442,7 +442,7 @@ contract TokensVault is Ownable {
 
     function addTokenCoins(uint256 _totalCoins) external onlyOwner{
         IERC20(tokenCoin).transferFrom(msg.sender, address(this), _totalCoins);
-        totalSupply_Coins += _totalCoins;
+        totalSupplyCoins += _totalCoins;
     }
 
     function calCoins(uint256 _tokens) public view returns (uint256) {
@@ -452,7 +452,7 @@ contract TokensVault is Ownable {
     }
 
     function setCycleDuration(uint256 _newDuration) external onlyOwner {
-        cycle_Duration = _newDuration;
+        cycleDuration = _newDuration;
     }
 
     function setMinBuyLimit(uint256 _minLimit) external onlyOwner {
@@ -480,14 +480,20 @@ contract TokensVault is Ownable {
     }
 
     function setLockedCycles(uint8 _lockedCycles) external onlyOwner {
-        locked_Cycles = _lockedCycles;
+        lockedCycles = _lockedCycles;
     }
 
     function setTotalCycles(uint8 _totalCycles) external onlyOwner {
-        total_Cycles = _totalCycles;
+        totalCycles = _totalCycles;
     }
 
     function retrieveMultiSigs() external view returns(address[] memory){
         return multiSigWallets;
     }
+
+    function userPurchasedTokens(address _user, uint256 _index) external view returns(uint256, uint256){
+     User storage user_ = user[_user];
+     require(_index <= user_.count, "Invalid index");
+     return (user_.tokensPurchased[_index], user_.lockedPeriod[_index]);
+    } 
 }
