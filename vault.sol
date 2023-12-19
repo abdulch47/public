@@ -201,7 +201,7 @@ abstract contract Ownable is Context {
 }
 
 contract MultiSigWallet {
-    uint256 public constant lockDuration = 730 days; //2 years locking period
+    uint256 public constant lockDuration = 10 minutes; //2 years locking period
 
     address public owner;
     address public promoter;
@@ -254,7 +254,7 @@ contract MultiSigWallet {
 pragma solidity ^0.8.0;
 
 contract TokensVault is Ownable {
-    uint256 public cycleDuration = 45 days;
+    uint256 public cycleDuration = 5 minutes;
     uint8 public lockedCycles = 6;
     uint8 public totalCycles = 96;
     uint256 public totalSupply;
@@ -349,11 +349,9 @@ contract TokensVault is Ownable {
 
         refUser.referralBonus += actualReferralBonus;
         // Transfer the actual referral bonus tokens to the referral address
-        if (actualReferralBonus > 0) {
             IERC20(abcToken).transfer(_ref, actualReferralBonus);
             refSupply -= actualReferralBonus;
             refUser.referralCount++;
-        }
 
         _user.count++;
         emit TokensBought(msg.sender, amount);
@@ -404,6 +402,7 @@ contract TokensVault is Ownable {
     }
 
     function setCycle() external onlyOwner {
+        require(cycleCountIndex < totalCycles, "No more cycles");
         Cycle storage _cycle = cycle[cycleCountIndex];
         _cycle.cycleEndTime = block.timestamp + cycleDuration;
         if (cycleCountIndex == 0) {
