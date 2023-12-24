@@ -201,7 +201,7 @@ abstract contract Ownable is Context {
 }
 
 contract MultiSigWallet {
-    uint256 public constant lockDuration = 10 minutes; //2 years locking period
+    uint256 public constant lockDuration = 730 days; //2 years locking period
 
     address public owner;
     address public promoter;
@@ -254,7 +254,7 @@ contract MultiSigWallet {
 pragma solidity ^0.8.0;
 
 contract TokensVault is Ownable {
-    uint256 public cycleDuration = 5 minutes;
+    uint256 public cycleDuration = 45 days;
     uint8 public lockedCycles = 6;
     uint8 public totalCycles = 96;
     uint256 public totalSupply;
@@ -277,12 +277,15 @@ contract TokensVault is Ownable {
         uint256 count;
         mapping(uint256 => uint256) lockedPeriod;
         mapping(uint256 => uint256) tokensPurchased;
+        mapping(uint256 => uint256) bonusLockedPeriod;
+        mapping(uint256 => uint256) bonusTokens;
     }
 
     struct Cycle {
         uint256 cycleEndTime;
         uint256 availableTokens;
         uint256 soldTokens;
+        uint256 referralBonuses;
     }
 
     mapping(address => User) public user;
@@ -298,7 +301,7 @@ contract TokensVault is Ownable {
     constructor(address _abcToken, address _tokenCoin) {
         abcToken = _abcToken;
         tokenCoin = _tokenCoin;
-        minBuyLimit = 100 * 10**IERC20(abcToken).decimals();
+        minBuyLimit = 10 * 10**IERC20(abcToken).decimals();
         maxBuyLimit = 100000 * 10**IERC20(abcToken).decimals();
         tokensPerCoin = 100 * 10**IERC20(abcToken).decimals();
     }
@@ -325,6 +328,10 @@ contract TokensVault is Ownable {
         _cycle.availableTokens -= amount;
         _cycle.soldTokens += amount;
         uint256 _referralBonus = (amount * referralPercentage) / 100;
+        require(
+            _cycle.referralBonuses >= _referralBonus,
+            "Not enough bonus left for this cycle"
+        );
 
         // Transfer funds to buyer
         IERC20(abcToken).transfer(msg.sender, amount);
@@ -348,10 +355,14 @@ contract TokensVault is Ownable {
             : _referralBonus;
 
         refUser.referralBonus += actualReferralBonus;
+        refUser.bonusLockedPeriod[refUser.referralCount] =
+            block.timestamp +
+            (cycleDuration * lockedCycles);
+        refUser.bonusTokens[refUser.referralCount] = actualReferralBonus;
+        _cycle.referralBonuses -= actualReferralBonus;
         // Transfer the actual referral bonus tokens to the referral address
-            IERC20(abcToken).transfer(_ref, actualReferralBonus);
-            refSupply -= actualReferralBonus;
-            refUser.referralCount++;
+        IERC20(abcToken).transfer(_ref, actualReferralBonus);
+        refUser.referralCount++;
 
         _user.count++;
         emit TokensBought(msg.sender, amount);
@@ -401,17 +412,41 @@ contract TokensVault is Ownable {
         emit TokensConverted(msg.sender, convertedCoins);
     }
 
+    function convertRefTokens(uint256 _count) external {
+        User storage _user = user[msg.sender];
+        require(
+            _user.bonusLockedPeriod[_count] <= block.timestamp,
+            "Locked period not over yet"
+        );
+        uint256 userTokens = _user.bonusTokens[_count];
+        require(userTokens > 0, "Not enough tokens");
+        _user.bonusTokens[_count] = 0;
+        uint256 convertedCoins = calCoins(userTokens);
+        // Burn converted tokens
+        IERC20(abcToken).burnFrom(msg.sender, userTokens);
+        IERC20(tokenCoin).transfer(msg.sender, convertedCoins);
+
+        emit TokensConverted(msg.sender, convertedCoins);
+    }
+
     function setCycle() external onlyOwner {
         require(cycleCountIndex < totalCycles, "No more cycles");
         Cycle storage _cycle = cycle[cycleCountIndex];
         _cycle.cycleEndTime = block.timestamp + cycleDuration;
         if (cycleCountIndex == 0) {
             _cycle.availableTokens = totalSupply / totalCycles;
+            _cycle.referralBonuses =
+                (_cycle.availableTokens * referralPercentage) /
+                100;
         } else {
             Cycle memory previous_Cycle = cycle[cycleCountIndex - 1];
             uint256 _totalTokens = (totalSupply / totalCycles) +
                 previous_Cycle.availableTokens;
             _cycle.availableTokens = _totalTokens;
+            uint256 calBonus = ((totalSupply / totalCycles) *
+                referralPercentage) / 100;
+            uint256 _totalBonuses = calBonus + previous_Cycle.referralBonuses;
+            _cycle.referralBonuses = _totalBonuses;
         }
         uint256 multiSigTokens = multiSigSupply / totalCycles;
         uint256 multiSigCoins = calCoins(multiSigTokens);
@@ -450,7 +485,8 @@ contract TokensVault is Ownable {
     }
 
     function calCoins(uint256 _tokens) public view returns (uint256) {
-        uint256 _coins = (_tokens * 10 ** IERC20(tokenCoin).decimals()) / tokensPerCoin;
+        uint256 _coins = (_tokens * 10**IERC20(tokenCoin).decimals()) /
+            tokensPerCoin;
         return _coins;
     }
 
@@ -504,7 +540,21 @@ contract TokensVault is Ownable {
         return (user_.tokensPurchased[_index], user_.lockedPeriod[_index]);
     }
 
-    function upLineReferrals(address _user) external view returns (address[] memory){
+    function userRefBonuses(address _user, uint256 _index)
+        external
+        view
+        returns (uint256, uint256)
+    {
+        User storage user_ = user[_user];
+        require(_index <= user_.count, "Invalid index");
+        return (user_.bonusTokens[_index], user_.bonusLockedPeriod[_index]);
+    }
+
+    function upLineReferrals(address _user)
+        external
+        view
+        returns (address[] memory)
+    {
         User storage user_ = user[_user];
         return user_.referrals;
     }
