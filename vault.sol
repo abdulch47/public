@@ -229,6 +229,7 @@ contract MultiSigWallet {
 
     function unlockCoins() external onlyOwners {
         require(block.timestamp >= unlockTimestamp, "Coins are still locked");
+        require(totalCoinsLocked > 0, "Not enough coins locked");
         uint256 coinsTransfer = totalCoinsLocked;
         // Reset state variables
         totalCoinsLocked = 0;
@@ -251,7 +252,7 @@ contract MultiSigWallet {
 }
 
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity 0.8.20;
 
 contract TokensVault is Ownable {
     uint256 public cycleDuration = 45 days;
@@ -440,13 +441,16 @@ contract TokensVault is Ownable {
                 100;
         } else {
             Cycle memory previous_Cycle = cycle[cycleCountIndex - 1];
+            require(
+                previous_Cycle.cycleEndTime < block.timestamp,
+                "Previous cycle not over yet"
+            );
             uint256 _totalTokens = (totalSupply / totalCycles) +
                 previous_Cycle.availableTokens;
             _cycle.availableTokens = _totalTokens;
             uint256 calBonus = ((totalSupply / totalCycles) *
                 referralPercentage) / 100;
-            uint256 _totalBonuses = calBonus + previous_Cycle.referralBonuses;
-            _cycle.referralBonuses = _totalBonuses;
+            _cycle.referralBonuses = calBonus + previous_Cycle.referralBonuses;
         }
         uint256 multiSigTokens = multiSigSupply / totalCycles;
         uint256 multiSigCoins = calCoins(multiSigTokens);
