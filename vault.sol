@@ -862,7 +862,9 @@ contract TokensVault is Ownable, ReentrancyGuard{
          // Transfer funds to buyer
         SafeERC20.safeTransfer(IERC20(abcToken), msg.sender, amount);
         // Transfer the actual referral bonus tokens to the referral address
+        if(actualReferralBonus > 0){
         SafeERC20.safeTransfer(IERC20(abcToken), _ref, actualReferralBonus);
+        }
         emit TokensBought(msg.sender, amount);
     }
 
