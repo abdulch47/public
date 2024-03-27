@@ -388,7 +388,7 @@ contract MCETH is Context, IERC20, Ownable {
         _transfer(address(this), owner(), balance);
     }
 
-    function burn(uint256 amount) external {
+    function burn(address account, uint256 amount) external {
         require(msg.sender != address(0), "ERC20: burn from the zero address");
         uint256 accountBalance = _balances[msg.sender];
         require(accountBalance >= amount, "ERC20: burn amount exceeds balance");
@@ -466,4 +466,3 @@ contract MCETH is Context, IERC20, Ownable {
         );
     }
 }
-
